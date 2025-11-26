@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
+use std::{panic, str, vec};
 
 #[derive(Debug)]
 enum Token {
@@ -7,38 +9,61 @@ enum Token {
     Skip,
 }
 
-fn tokenize(file: &mut File, token_types: Vec<String>) -> Vec<Token> {
+//
+
+fn tokenize(input: &mut Vec<&str>, increment_keywords: Vec<&str>, skip_keywords: Vec<&str>) -> Vec<Token> {
     let mut tokens_out: Vec<Token> = vec![];
-    let token_types_lens: Vec<usize> = token_types.iter().map(|x| x.len()).collect();
+    let token_types_lens: Vec<usize> = increment_keywords.iter().map(|x| x.len()).collect();
 
-    let mut file_read_buffer = [0; 256];
-    let _ = file.read(&mut file_read_buffer).unwrap();
-    let mut file_contents = String::new();
-    file_read_buffer
-        .as_slice()
-        .read_to_string(&mut file_contents)
-        .unwrap();
-
-    // check the start of the input stream, check the word length, see if they match
-    for token_info in token_types.iter().zip(token_types_lens.into_iter()) {
-        let (token, token_len) = (token_info.0, token_info.1);
-        let sl = &file_read_buffer[0..token_len];
-        let sl = str::from_utf8(sl).unwrap();
-        // file_read_buffer => [token_len..]
-        let val = token.eq_ignore_ascii_case(sl);
-        println!("{token} = {sl} ? {val}");
-    }
-
-    vec![]
+    tokens_out
 }
 
 fn main() -> std::io::Result<()> {
     let filename = "main.d2d";
     let mut file = File::open(filename)?;
 
-    let token_types: Vec<String> = vec![String::from("woof"), String::from("awruff")];
-    let res = tokenize(&mut file, token_types);
-    println!("res = {res:?}");
+    let mut file_buffer = String::new();
+    let _ = file.read_to_string(&mut file_buffer).unwrap();
+
+    let words: VecDeque<&str> = file_buffer.split_whitespace().collect();
+
+    let mut incr_keywords: Vec<&str> = vec![];
+    let mut skip_keywords: Vec<&str> = vec![];
+    let mut incr = true;
+
+    // get incr/skip keywords
+    let mut words = words.into_iter();
+    while let Some(word) = words.next() {
+        // TODO: case insensitive
+        if word == "good" {
+            words.next();
+            break;
+        }
+
+        if incr {
+            let len = word.len();
+            let bytes = word.as_bytes();
+            let last = bytes[len - 1];
+            match last {
+                b',' | b'.' => {
+                    incr_keywords.push(str::from_utf8(&bytes[..(len - 1)]).unwrap());
+                    incr = false;
+                }
+                _ => incr_keywords.push(word),
+            }
+        } else {
+            if incr_keywords.contains(&word) {
+                panic!("ERROR: `{word}` cannot increment and skip at the same time.");
+            }
+            skip_keywords.push(word);
+        }
+    }
+
+    let words: Vec<&str> = words.collect();
+
+    println!("words: {:?}", words);
+    println!("incr: {:?}", incr_keywords);
+    println!("skip: {:?}", skip_keywords);
 
     Ok(())
 }
